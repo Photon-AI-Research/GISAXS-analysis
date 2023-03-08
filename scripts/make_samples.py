@@ -1,3 +1,5 @@
+import sys
+sys.path.append('..')
 from json import loads
 from argparse import ArgumentParser
 from numpy import float16, short

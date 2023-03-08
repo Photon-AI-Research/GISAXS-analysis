@@ -1,7 +1,7 @@
-#centered simulation
 import bornagain as ba
 
 BEAM_INTENSITY = 1e+13
+
 
 def get_simulation(detector=None):
     """
@@ -10,18 +10,16 @@ def get_simulation(detector=None):
     """
     if detector is None:
         detector = {
-            "y_bins": 512, #120
-            "z_bins": 1024, #1200
+            "y_bins": 512,
+            "z_bins": 1024,
             "psize": 0.05,
-            "y": 215, #60
-            "z": 413, #300
+            "y": 215,
+            "z": 413,
             "wavelength":0.14073,
             "alpha_i":0.64
         }
     wl = detector["wavelength"]
     ai = detector["alpha_i"]
-    #xmin, xmax = detector["xmin"], detector["xmax"]
-    #ymin, ymax = detector["ymin"], detector["ymax"]
 
     sdd = 1277.0  # Sample-detector-distance in millimeter
     nbins_y = detector["y_bins"]  # Number of pixel in the y-direction of the detector
@@ -37,11 +35,8 @@ def get_simulation(detector=None):
     simulation = ba.GISASSimulation()
     simulation.setDetector(detector)
     simulation.setDetectorResolutionFunction(ba.ResolutionFunction2DGaussian(0.02, 0.02))
-
     simulation.setBeamParameters(wl*ba.nm, ai*ba.deg, 0.0*ba.deg)
     simulation.setBeamIntensity(BEAM_INTENSITY)
-
-    #simulation.setRegionOfInterest(xmin, ymin, xmax, ymax)
 
     simulation.getOptions().setUseAvgMaterials(True)
     simulation.getOptions().setIncludeSpecular(False)

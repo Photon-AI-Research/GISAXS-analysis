@@ -1,52 +1,77 @@
-from torch import sort, searchsorted, clip
-from torch.nn.functional import interpolate
+import torch
+import torch.nn.functional as F
 from torch.nn import Module, Sequential, Identity
 from math import log10
 
-MEAN = 125 #73.6592
-STD = 130 #653.2066
+def salt_and_pepper(x_in, prob):
+    """
+    Add salt and pepper noise to an image
+    Inputs:
+        x_in: input image
+        prob: probability of noise
+    Outputs:
+        x_out: noisy image
+    """
+    x_out = x_in.clone()
+    noise_tensor=torch.rand_like(x_out)
+    salt=torch.max(x_out)
+    pepper=torch.min(x_out)
+    x_out[noise_tensor < prob/2]=salt
+    x_out[noise_tensor > 1-prob/2]=pepper
+    return x_out
 
-class Log(Module):
-    def __init__(self, a):
+class Clip(Module):
+    """
+    Clip the input to the 10th percentile
+    Used to remove outliers
+    """
+    def __init__(self):
         super().__init__()
-        self.a = a
         
     def forward(self, x):
-        x = clip(x, self.a)
-        return x.log10()
+        eps = torch.sort(x.reshape(-1))[0][int(0.1*x.numel())].item() #90 percentile
+        return torch.clip(x, eps)   
 
-class Equalize(Module):
+class Log(Module):
+    """
+    Logarithm of the input
+    """
+    def __init__(self, eps = 1e-3):
+        super().__init__()
+        self.eps = eps
+        
+    def forward(self, x):
+        return torch.clip(x, self.eps).log10()
+
+class MinMax(Module):
+    """
+    MinMax normalization of the input
+    """
     def __init__(self):
         super().__init__()
      
     def forward(self, x):
-        shape = x.shape
-        bs = x.shape[0]
-        numel = x.shape[1]*x.shape[2]
-        sorted_sequence = sort(x.reshape(bs,-1))[0]
-        x = searchsorted(sorted_sequence, x.reshape(bs,-1))/numel
-        return 2*x.reshape(shape) - 1
-
-class MinMax(Module):
-    def __init__(self, a, b):
-        super().__init__()
-        self.a = a
-        self.b = b
-     
-    def forward(self, x):
-        x = clip(x, self.a, self.b)
-        x = (x - self.a) / (self.b - self.a)
-        return 2*x - 1 
+        return (x - x.min()) / (x.max() - x.min()) 
 
 class Transform(Module):
-    def __init__(self, to_log, to_minmax, to_equalize, a, b):
+    """
+    Preprocessing of the input
+    Inputs:
+        to_log (bool): apply log to the input
+        to_minmax (bool): apply minmax normalization to the input
+        to_equalize (bool): apply histogram equalization to the input
+        in_shape (bool): shape of the input
+        out_shape (bool): shape of the output
+    """
+    def __init__(self, to_log: bool, to_minmax: bool, to_equalize: bool, in_shape: list = None, out_shape: list = None):
         super().__init__()
-        self.transform = []
+        self.in_shape = in_shape
+        self.out_shape = out_shape
+        self.transform = [Clip()]
         if to_log:
-            self.transform.append(Log(a))
-            a, b = log10(a), log10(b)
+            self.transform.append(Log())
         if to_minmax:
-            self.transform.append(MinMax(a, b))
+            self.transform.append(MinMax())
         if to_equalize:
             self.transform.append(Equalize())
         if not len(self.transform):
@@ -54,7 +79,6 @@ class Transform(Module):
         self.transform = Sequential(*self.transform)
 
     def __call__(self, x):
-        x = x.view(-1, 1200, 120)
+        x = x.view(-1, *self.in_shape)[:,:,128:300]
         x = self.transform(x)
-        x = x.unsqueeze(1)
-        return interpolate(x, (128,16)).squeeze()
+        return x
